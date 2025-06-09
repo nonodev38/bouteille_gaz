@@ -1,1 +1,269 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>📄 Gestion des Bouteilles</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2rem; }
+    input[type="file"], input[type="text"], button {
+      width: 100%; padding: 10px; margin: 10px 0; font-size: 16px;
+    }
+    ul { list-style-type: none; padding: 0; border: 1px solid #ccc; max-height: 250px; overflow-y: auto; }
+    li { padding: 8px; border-bottom: 1px solid #eee; cursor: pointer; }
+    li:last-child { border-bottom: none; }
+    hr { margin: 2rem 0; }
+  </style>
+</head>
+<body>
+
+  <h2>📄 Gestion Bouteilles Gaz</h2>
+<input type="text" id="searchInput" placeholder="🔍 Rechercher..." />
+  <ul id="results"></ul>
+
+  <hr />
+
+  <h2>Ajouter une bouteille</h2>
+
+<input type="datetime-local" id="datePicker">   
+
+  <button id="addButton">➕ Valider</button>
+    
+  <input type="text" id="searchBouteilleInput" placeholder="🔍 Rechercher une bouteille par numéro..." />
+  <ul id="bouteilleList"></ul>
+  <button id="exportButton">📄 Exporter bouteille.txt</button>
+  <button id="importButton">📅 Importer bouteille.txt</button>
+  <input type="file" id="importFileInput" accept=".txt" style="display:none" />
+
+  <script>
+
+      const now = new Date();
+      const offset = now.getTimezoneOffset();
+      const localDate = new Date(now.getTime() - offset * 60 * 1000); // Corrige le fuseau
+      document.getElementById('datePicker').value = localDate.toISOString().slice(0, 16);
+
+
+    const fileInput = document.getElementById('fileInput');
+    const searchInput = document.getElementById('searchInput');
+    const results = document.getElementById('results');
+    const addButton = document.getElementById('addButton');
+    const exportButton = document.getElementById('exportButton');
+    const bouteilleList = document.getElementById('bouteilleList');
+    const importButton = document.getElementById('importButton');
+    const importFileInput = document.getElementById('importFileInput');
+    const mainForm = document.getElementById('mainForm');
+    const newTypeInput = document.getElementById('newType');
+    const newNumInput = document.getElementById('newNum');
+    const searchBouteilleInput = document.getElementById('searchBouteilleInput');
+
+    let lines = [];
+    let bouteilles = [];
+    let idCounter = 1;
+    let selectedType = '';
+    let selectedNum = '';
+
+
+
+window.addEventListener('DOMContentLoaded', () => {
+  generateStaticList(); // <--- ajoute ceci
+
+  const saved = localStorage.getItem('bouteilles');
+  if (saved) {
+    bouteilles = JSON.parse(saved);
+    const existingIds = bouteilles.map(line => parseInt(line.split(',')[0])).filter(n => !isNaN(n));
+    idCounter = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
+    updateBouteilleList();
+  }
+});
+
+function generateStaticList() {
+  lines = [];
+
+  for (let i = 1; i <= 40; i++) {
+    const paddedNum = String(i).padStart(2, '0');  // Ajoute un 0 si < 10
+
+    const idMH = i;
+    const idCH = i + 40;
+
+    lines.push(`${idMH},MH,${paddedNum}`);
+    //lines.push(`${idCH},CH,${paddedNum}`);
+  }
+
+  for (let i = 1; i <= 10; i++) {
+    const paddedNum = String(i).padStart(2, '0');  // Ajoute un 0 si < 10
+
+    const idMH = i;
+    const idCH = i + 40;
+
+    //lines.push(`${idMH},MH,${paddedNum}`);
+    lines.push(`${idCH},CH,${paddedNum}`);
+  }
+
+  displayResults(lines);
+}
+
+    searchInput.addEventListener('input', () => {
+      const query = searchInput.value.toLowerCase();
+      const filtered = lines.filter(line => {
+        const parts = line.split(',');
+        return parts.length > 2 &&
+               (`${parts[1]} ${parts[2]}`).toLowerCase().includes(query);
+      });
+      displayResults(filtered);
+    });
+
+    function displayResults(data) {
+      results.innerHTML = '';
+      data.forEach((line) => {
+        const parts = line.split(',');
+        if (parts.length > 2) {
+          const li = document.createElement('li');
+          li.textContent = `${parts[1]} ${parts[2]}`;
+
+          li.addEventListener('click', () => {
+            selectedType = parts[1];
+            selectedNum = parts[2];
+            const allItems = results.querySelectorAll('li');
+            allItems.forEach(item => item.style.backgroundColor = '');
+            li.style.backgroundColor = '#cceeff';
+          });
+
+          results.appendChild(li);
+        }
+      });
+    }
+
+addButton.addEventListener('click', () => {
+  if (!selectedType || !selectedNum) {
+    alert("⚠️ Veuillez sélectionner un élément dans la liste de bdMain.txt d'abord.");
+    return;
+  }
+
+  const picker = document.getElementById('datePicker');
+  let formattedDate;
+
+  if (picker.value) {
+    const selected = new Date(picker.value);
+    const day = String(selected.getDate()).padStart(2, '0');
+    const month = String(selected.getMonth() + 1).padStart(2, '0');
+    const year = selected.getFullYear();
+    const hours = String(selected.getHours()).padStart(2, '0');
+    const minutes = String(selected.getMinutes()).padStart(2, '0');
+    formattedDate = `${day}-${month}-${year} ${hours}:${minutes}`;
+  } else {
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const year = now.getFullYear();
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    formattedDate = `${day}-${month}-${year} ${hours}:${minutes}`;
+  }
+
+  const id = idCounter++;
+  const entry = `${id},${selectedType},${selectedNum},${formattedDate}`;
+
+  bouteilles.push(entry);
+  updateBouteilleList();
+  saveBouteilles();
+
+      const now = new Date();
+      const offset = now.getTimezoneOffset();
+      const localDate = new Date(now.getTime() - offset * 60 * 1000); // Corrige le fuseau
+      document.getElementById('datePicker').value = localDate.toISOString().slice(0, 16);
+});
+
+    function saveBouteilles() {
+      localStorage.setItem('bouteilles', JSON.stringify(bouteilles));
+    }
+
+    function updateBouteilleList() {
+      const filter = searchBouteilleInput.value.toLowerCase();
+      bouteilleList.innerHTML = '';
+      bouteilles.forEach((b, index) => {
+        const [, type, num, date] = b.split(',');
+        if (!num.toLowerCase().includes(filter)) return;
+        const dateOnly = date.split(' ')[0];
+
+        const li = document.createElement('li');
+        li.style.display = 'flex';
+        li.style.justifyContent = 'space-between';
+        li.style.alignItems = 'center';
+
+        const textSpan = document.createElement('span');
+        textSpan.textContent = `📜 ${type} - ${num} | 📅 ${dateOnly}`;
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.innerHTML = '🗑️';
+        deleteBtn.title = 'Supprimer';
+        deleteBtn.style.background = 'none';
+        deleteBtn.style.border = 'none';
+        deleteBtn.style.cursor = 'pointer';
+        deleteBtn.style.fontSize = '18px';
+        deleteBtn.style.width = '24px';
+        deleteBtn.style.height = '24px';
+        deleteBtn.style.display = 'flex';
+        deleteBtn.style.alignItems = 'center';
+        deleteBtn.style.justifyContent = 'right';
+
+        deleteBtn.addEventListener('click', () => {
+          bouteilles.splice(index, 1);
+          saveBouteilles();
+          updateBouteilleList();
+        });
+
+        li.appendChild(textSpan);
+        li.appendChild(deleteBtn);
+        bouteilleList.appendChild(li);
+      });
+    }
+
+    searchBouteilleInput.addEventListener('input', updateBouteilleList);
+
+    exportButton.addEventListener('click', () => {
+      const blob = new Blob([bouteilles.join('\n')], { type: 'text/plain' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'bouteille.txt';
+      a.click();
+    });
+
+    importButton.addEventListener('click', () => {
+      importFileInput.click();
+    });
+
+    importFileInput.addEventListener('change', (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const importedLines = e.target.result
+          .split('\n')
+          .map(line => line.trim())
+          .filter(line => line.length > 0);
+
+        let newEntries = 0;
+
+        importedLines.forEach(line => {
+          if (!bouteilles.includes(line)) {
+            bouteilles.push(line);
+            newEntries++;
+          }
+        });
+
+        if (newEntries > 0) {
+          saveBouteilles();
+          updateBouteilleList();
+          alert(`✅ ${newEntries} nouvelles bouteilles importées !`);
+        } else {
+          alert("📁 Aucun nouvel élément à importer.");
+        }
+      };
+
+      reader.readAsText(file);
+    });
+  </script>
+
+</body>
+</html>
 
